@@ -3,118 +3,303 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ashutosh 3D Base</title>
+    <title>Ashutosh Interactive HQ</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #111; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: 'Segoe UI', sans-serif; }
+        
+        /* 1. THE LAPTOP SCREEN INTERFACE (Hidden by default) */
+        #laptop-interface {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0); /* Hidden size */
+            width: 600px; height: 400px;
+            background: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 10px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            z-index: 100;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            opacity: 0; transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #laptop-interface.active { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+
+        /* Window Header */
+        .os-header {
+            background: #333; padding: 10px; color: #fff; display: flex; justify-content: space-between; align-items: center;
+        }
+        .close-btn { color: #ff5555; cursor: pointer; font-weight: bold; }
+
+        /* Window Content */
+        .os-content { padding: 20px; color: #ccc; flex-grow: 1; display: flex; gap: 20px; }
+        
+        /* Sidebar */
+        .sidebar { width: 120px; border-right: 1px solid #444; }
+        .menu-btn { 
+            display: block; padding: 10px; width: 100%; text-align: left; 
+            background: none; border: none; color: #aaa; cursor: pointer; transition: 0.2s;
+        }
+        .menu-btn:hover, .menu-btn.active { background: #333; color: #fff; border-left: 3px solid #00ffcc; }
+
+        /* Main View */
+        .view-area { flex-grow: 1; position: relative; }
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* Form Styles */
+        input, textarea { width: 100%; background: #222; border: 1px solid #444; color: #fff; padding: 8px; margin-bottom: 10px; }
+        button.action-btn { background: #00ffcc; color: #000; border: none; padding: 8px 15px; cursor: pointer; font-weight: bold; }
+        
+        /* Project List Style */
+        .project-item { background: #252525; padding: 10px; margin-bottom: 10px; border-left: 3px solid #00ffcc; }
+
+        /* Tutorial Text */
+        #hint {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            color: rgba(255,255,255,0.5); pointer-events: none;
+        }
     </style>
 </head>
 <body>
+
+    <!-- THE OS INTERFACE (HTML Overlay) -->
+    <div id="laptop-interface">
+        <div class="os-header">
+            <span>ASHUTOSH_OS // TERMINAL</span>
+            <span class="close-btn" onclick="closeLaptop()">[X]</span>
+        </div>
+        <div class="os-content">
+            <div class="sidebar">
+                <button class="menu-btn active" onclick="switchTab('projects')">My Projects</button>
+                <button class="menu-btn" onclick="switchTab('edit')">Edit / Add</button>
+            </div>
+            
+            <div class="view-area">
+                <!-- VIEW PROJECTS TAB -->
+                <div id="tab-projects" class="page active">
+                    <h3>Active Projects</h3>
+                    <div id="project-list">
+                        <div style="color:#666; font-style:italic;">No projects loaded...</div>
+                    </div>
+                </div>
+
+                <!-- EDIT PROJECTS TAB -->
+                <div id="tab-edit" class="page">
+                    <h3>Add New Project</h3>
+                    <input type="text" id="p-name" placeholder="Project Name">
+                    <textarea id="p-desc" placeholder="Description" rows="4"></textarea>
+                    <button class="action-btn" onclick="addProject()">SAVE TO DATABASE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="hint">CLICK THE LAPTOP TO OPEN</div>
 
     <!-- 3D ENGINE -->
     <script type="module">
         import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-        // --- 1. THE SCENE ---
+        // --- 1. SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x202020); // Dark grey background
-        scene.fog = new THREE.Fog(0x202020, 10, 50);  // Depth fog
+        scene.background = new THREE.Color(0x202020);
+        scene.fog = new THREE.Fog(0x202020, 5, 30);
 
-        // --- 2. THE CAMERA ---
         const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 5, 10); // Positioned high and back
-        camera.lookAt(0, 1, 0);
+        
+        // Camera State
+        let targetPosition = new THREE.Vector3(0, 5, 10); // Default View
+        let targetLookAt = new THREE.Vector3(0, 1, 0);    // Looking at center
+        camera.position.copy(targetPosition);
+        camera.lookAt(targetLookAt);
 
-        // --- 3. THE RENDERER (ULTRA SETTINGS) ---
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio); // Sharp resolution
-        
-        // Cinematic Lighting Settings
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Soft, realistic shadows
-        renderer.toneMapping = THREE.ACESFilmicToneMapping; // Movie-grade lighting
-        renderer.outputColorSpace = THREE.SRGBColorSpace;   // Accurate colors
-        
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        // --- 4. THE LIGHTING ---
-        // Ambient Light (Fill light)
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        // --- 2. LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         scene.add(ambientLight);
 
-        // The Sun (Directional Light)
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        dirLight.position.set(5, 10, 5); // Light coming from top-right
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 12, 5);
         dirLight.castShadow = true;
-        
-        // High-Res Shadow Settings
         dirLight.shadow.mapSize.width = 1024;
         dirLight.shadow.mapSize.height = 1024;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 50;
         scene.add(dirLight);
 
-        // --- 5. MATERIALS ---
-        // The "Light Pink" Material (Matte paint look)
-        const pinkWallMat = new THREE.MeshStandardMaterial({ 
-            color: 0xFFB6C1, 
-            roughness: 0.4, 
-            metalness: 0.1 
-        });
+        // --- 3. MATERIALS ---
+        const pinkWallMat = new THREE.MeshStandardMaterial({ color: 0xFFB6C1, roughness: 0.4 });
+        const pinkFloorMat = new THREE.MeshStandardMaterial({ color: 0xFFC0CB, roughness: 0.3 });
+        const deskMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a }); // Dark Desk
+        const laptopMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.8, roughness: 0.2 });
+        const screenGlowMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc }); // The Glowing Screen
 
-        // The Floor Material (Slightly reflective)
-        const pinkFloorMat = new THREE.MeshStandardMaterial({ 
-            color: 0xFFC0CB, 
-            roughness: 0.3, 
-            metalness: 0.2 
-        });
+        // --- 4. ROOM ---
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), pinkFloorMat);
+        floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
-        // --- 6. ROOM CONSTRUCTION ---
-        
-        // FLOOR
-        const floor = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 20), pinkFloorMat);
-        floor.position.y = -0.25; // Sinks slightly so top is at 0
-        floor.receiveShadow = true;
-        scene.add(floor);
-
-        // BACK WALL
         const backWall = new THREE.Mesh(new THREE.BoxGeometry(20, 5, 0.5), pinkWallMat);
-        backWall.position.set(0, 2.5, -5);
-        backWall.castShadow = true;
-        backWall.receiveShadow = true;
-        scene.add(backWall);
+        backWall.position.set(0, 2.5, -5); backWall.receiveShadow = true; backWall.castShadow = true; scene.add(backWall);
 
-        // LEFT WALL
         const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 20), pinkWallMat);
-        leftWall.position.set(-5, 2.5, 0);
-        leftWall.castShadow = true;
-        leftWall.receiveShadow = true;
-        scene.add(leftWall);
+        leftWall.position.set(-5, 2.5, 0); leftWall.receiveShadow = true; leftWall.castShadow = true; scene.add(leftWall);
 
-        // --- 7. DEMO OBJECT (Floating Cube) ---
-        // This exists just so you can see the shadow!
-        const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
-        const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0x00ffcc });
-        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-        cube.position.y = 1.5;
-        cube.castShadow = true;
-        scene.add(cube);
+        // --- 5. THE WORKSTATION (New Code) ---
+        const deskGroup = new THREE.Group();
+        
+        // Table Top
+        const table = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1.5), deskMat);
+        table.position.y = 1.5; table.castShadow = true; table.receiveShadow = true;
+        deskGroup.add(table);
 
-        // --- 8. ANIMATION LOOP ---
+        // Legs
+        const legGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.5);
+        const l1 = new THREE.Mesh(legGeo, deskMat); l1.position.set(-1.4, 0.75, -0.6); deskGroup.add(l1);
+        const l2 = new THREE.Mesh(legGeo, deskMat); l2.position.set(1.4, 0.75, -0.6); deskGroup.add(l2);
+        const l3 = new THREE.Mesh(legGeo, deskMat); l3.position.set(-1.4, 0.75, 0.6); deskGroup.add(l3);
+        const l4 = new THREE.Mesh(legGeo, deskMat); l4.position.set(1.4, 0.75, 0.6); deskGroup.add(l4);
+
+        // LAPTOP (Interactive Part)
+        const laptopBase = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.5), laptopMat);
+        laptopBase.position.set(0, 1.55, 0); 
+        deskGroup.add(laptopBase);
+
+        const laptopScreen = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.02), laptopMat);
+        laptopScreen.position.set(0, 1.8, -0.25);
+        laptopScreen.rotation.x = 0.1; // Tilted slightly
+        deskGroup.add(laptopScreen);
+
+        // The "Clickable" Screen Area
+        const display = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.4), screenGlowMat);
+        display.position.set(0, 1.8, -0.23);
+        display.rotation.x = 0.1;
+        display.rotation.y = 0; // Fix rotation
+        display.userData = { name: "LAPTOP_SCREEN" }; // IMPORTANT: ID for Raycaster
+        deskGroup.add(display);
+
+        // Position Desk in Room
+        deskGroup.position.set(0, 0, 0);
+        scene.add(deskGroup);
+
+        // --- 6. RAYCASTER (The Mouse Interaction) ---
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            // Convert click to 3D coordinates
+            pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true); // true = check children (deskGroup)
+
+            if (intersects.length > 0) {
+                const objectName = intersects[0].object.userData.name;
+                
+                if (objectName === "LAPTOP_SCREEN") {
+                    openLaptop();
+                }
+            }
+        });
+
+        // --- 7. ANIMATION FUNCTIONS ---
+        let isZoomed = false;
+
+        window.openLaptop = function() {
+            isZoomed = true;
+            // 1. Move Camera Close to Laptop
+            targetPosition.set(0, 2.5, 2); 
+            targetLookAt.set(0, 1.5, 0);
+            
+            // 2. Show HTML UI after short delay
+            setTimeout(() => {
+                document.getElementById('laptop-interface').classList.add('active');
+            }, 800);
+        };
+
+        window.closeLaptop = function() {
+            isZoomed = false;
+            // 1. Reset Camera
+            targetPosition.set(0, 5, 10);
+            targetLookAt.set(0, 1, 0);
+            // 2. Hide UI
+            document.getElementById('laptop-interface').classList.remove('active');
+        };
+
+        // --- 8. UI LOGIC (The "Functional" Part) ---
+        // Simple storage array
+        let projects = [];
+
+        window.switchTab = function(tabName) {
+            // Reset Buttons
+            document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('active'));
+            // Reset Pages
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            
+            // Activate selected
+            document.getElementById('tab-' + tabName).classList.add('active');
+            event.target.classList.add('active'); // Highlight button
+        };
+
+        window.addProject = function() {
+            const name = document.getElementById('p-name').value;
+            const desc = document.getElementById('p-desc').value;
+
+            if(name) {
+                projects.push({ name: name, desc: desc });
+                alert("Project Saved to Memory!");
+                // Clear inputs
+                document.getElementById('p-name').value = "";
+                document.getElementById('p-desc').value = "";
+                updateProjectList();
+                switchTab('projects'); // Go to view tab
+            }
+        };
+
+        function updateProjectList() {
+            const list = document.getElementById('project-list');
+            list.innerHTML = ""; // Clear current list
+            
+            if(projects.length === 0) {
+                list.innerHTML = '<div style="color:#666;">No projects loaded...</div>';
+                return;
+            }
+
+            projects.forEach(p => {
+                const div = document.createElement('div');
+                div.className = "project-item";
+                div.innerHTML = `<strong>${p.name}</strong><br><small>${p.desc}</small>`;
+                list.appendChild(div);
+            });
+        }
+
+        // --- 9. ANIMATION LOOP ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Rotate the cube slowly
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.01;
+            // Smooth Camera Movement (Lerp)
+            // It moves 5% of the distance to the target every frame
+            camera.position.lerp(targetPosition, 0.05);
+            
+            // Smooth Rotation (LookAt requires manual interpolation or OrbitControls, 
+            // but for simplicity we will just snap lookAt or use a dummy object if needed.
+            // For now, let's keep lookAt constant or simple update)
+            // To animate lookAt properly, we usually use Controls, but here is a simple method:
+            const currentLook = new THREE.Vector3();
+            camera.getWorldDirection(currentLook);
+            
+            // For simple zoom, direct LookAt update works okay if target changes slowly
+            camera.lookAt(targetLookAt);
 
             renderer.render(scene, camera);
         }
 
         animate();
 
-        // Handle Window Resize (Keeps it looking good on mobile)
+        // Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -124,3 +309,5 @@
     </script>
 </body>
 </html>
+
+
