@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Empire HQ: RELOADED</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
+        
+        /* LOADING SCREEN (Crucial for Mobile) */
+        #loader {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: #00ffcc; transition: opacity 0.5s;
+        }
+        .loader-bar {
+            width: 200px; height: 4px; background: #333; margin-top: 20px;
+            border-radius: 2px; overflow: hidden;
+        }
+        .loader-progress {
+            width: 0%; height: 100%; background: #00ffcc;
+            transition: width 0.2s;
+            box-shadow: 0 0 10px #00ffcc;
+        }
+
+        /* UI LAYER */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; pointer-events: none; opacity: 0; transition: opacity 1s;
+        }
+        #ui-layer.visible { opacity: 1; }
+
+        .status-bar {
+            position: absolute; top: 20px; left: 20px;
+            color: #00ffcc; font-weight: bold; letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+        }
+
+        /* POPUP CARD */
+        #popup-card {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            width: 300px;
+            background: rgba(10, 10, 10, 0.9);
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            border-left: 4px solid #00ffcc;
+            padding: 20px;
+            border-radius: 12px;
+            color: #fff;
+            opacity: 0; transition: all 0.3s;
+            pointer-events: none;
+        }
+        #popup-card.active { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+        .card-header { font-size: 18px; color: #00ffcc; margin-bottom: 10px; text-transform: uppercase; }
+        .card-body { font-size: 13px; color: #ccc; line-height: 1.5; margin-bottom: 15px; }
+        .card-btn {
+            display: block; width: 100%; padding: 10px;
+            background: #00ffcc; color: #000; font-weight: bold;
+            text-align: center; text-decoration: none; border-radius: 4px;
+        }
+
+        /* JOYSTICK */
+        #joystick-zone {
+            position: absolute; bottom: 40px; left: 40px;
+            width: 120px; height: 120px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%; pointer-events: auto; touch-action: none;
+        }
+        #joystick-knob {
+            position: absolute; top: 50%; left: 50%; width: 40px; height: 40px;
+            background: rgba(0, 255, 204, 0.5);
+            border-radius: 50%; transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px #00ffcc;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- LOADING SCREEN -->
+    <div id="loader">
+        <div style="font-size: 20px; letter-spacing: 3px;">SYSTEM BOOT</div>
+        <div class="loader-bar"><div class="loader-progress" id="progress"></div></div>
+        <div id="status-text" style="margin-top: 10px; font-size: 12px; color: #666;">Initializing Core...</div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <div class="status-bar">ASHUTOSH OS <span style="font-size:10px;">ONLINE</span></div>
+        
+        <div id="popup-card">
+            <div class="card-header" id="p-title">HEADER</div>
+            <div class="card-body" id="p-desc">Content...</div>
+            <a href="#" class="card-btn" id="p-action">ACCESS</a>
+        </div>
+
+        <div id="joystick-zone"><div id="joystick-knob"></div></div>
+    </div>
+
+    <script type="module">
+        // Using jsDelivr for faster loading in India
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+        const loaderText = document.getElementById('status-text');
+        const progressBar = document.getElementById('progress');
+        
+        try {
+            // --- 1. SETUP ---
+            loaderText.innerText = "Loading 3D Engine...";
+            progressBar.style.width = "20%";
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            scene.fog = new THREE.FogExp2(0x0a0a0a, 0.025);
+
+            const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 15, 15);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Optimized for Vivo
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            loaderText.innerText = "Building Environment...";
+            progressBar.style.width = "50%";
+
+            // --- 2. LIGHTS ---
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+            scene.add(hemiLight);
+
+            const spotLight = new THREE.SpotLight(0xffffff, 1.5);
+            spotLight.position.set(10, 20, 10);
+            spotLight.castShadow = true;
+            // Lower shadow map size to prevent crash on 3GB RAM
+            spotLight.shadow.mapSize.width = 512; 
+            spotLight.shadow.mapSize.height = 512; 
+            scene.add(spotLight);
+
+            // --- 3. FLOOR ---
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(50, 50),
+                new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8, metalness: 0.2 })
+            );
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const grid = new THREE.GridHelper(50, 50, 0x333333, 0x111111);
+            scene.add(grid);
+
+            // --- 4. ASSETS ---
+            
+            // Helper to make simple shadow casting boxes
+            function makeBox(w, h, d, color, x, z) {
+                const geo = new THREE.BoxGeometry(w, h, d);
+                const mat = new THREE.MeshStandardMaterial({ color: color });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, h/2, z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                return mesh;
+            }
+
+            // BOOKSHELF (Simple Group)
+            const shelfGroup = new THREE.Group();
+            const shelfFrame = new THREE.Mesh(new THREE.BoxGeometry(2, 4, 1), new THREE.MeshStandardMaterial({color:0x5C4033}));
+            shelfFrame.position.y = 2; shelfFrame.castShadow=true;
+            shelfGroup.add(shelfFrame);
+            // Add fake books (Random blocks)
+            for(let i=0; i<10; i++){
+                const book = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.8), new THREE.MeshStandardMaterial({color: Math.random() * 0xffffff}));
+                book.position.set((Math.random()-0.5)*1.5, 1 + Math.random()*2, 0);
+                shelfGroup.add(book);
+            }
+            shelfGroup.position.set(-5, 0, -5);
+            scene.add(shelfGroup);
+
+            // DESK
+            const deskGroup = new THREE.Group();
+            const deskTop = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 1.5), new THREE.MeshStandardMaterial({color:0x111111}));
+            deskTop.position.y = 1.5; deskTop.castShadow=true;
+            deskGroup.add(deskTop);
+            // Laptop
+            const laptop = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.5), new THREE.MeshStandardMaterial({color:0x333333}));
+            laptop.position.set(0, 1.8, 0);
+            deskGroup.add(laptop);
+            const screen = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.05), new THREE.MeshBasicMaterial({color:0x00ffff}));
+            screen.position.set(0, 1.8, 0.25);
+            deskGroup.add(screen);
+            deskGroup.position.set(5, 0, -5);
+            scene.add(deskGroup);
+
+            // BED
+            const bed = makeBox(2.5, 0.6, 4, 0xAA3333, 5, 5);
+            const pillow = new THREE.Mesh(new THREE.BoxGeometry(2, 0.3, 1), new THREE.MeshStandardMaterial({color:0xffffff}));
+            pillow.position.set(0, 0.5, -1.5);
+            bed.add(pillow);
+
+            // BOXING BAG
+            const bagGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 12);
+            const bagMat = new THREE.MeshStandardMaterial({color:0xff0000});
+            const bag = new THREE.Mesh(bagGeo, bagMat);
+            bag.position.set(-5, 2.5, 5);
+            bag.castShadow = true;
+            scene.add(bag);
+            // Chain
+            const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5), new THREE.MeshBasicMaterial({color:0x888888}));
+            chain.position.y = 1.75;
+            bag.add(chain);
+
+            loaderText.innerText = "Spawning Player...";
+            progressBar.style.width = "80%";
+
+            // --- 5. PLAYER ---
+            const playerGroup = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.4), new THREE.MeshStandardMaterial({color:0x00ffcc}));
+            body.position.y = 1; body.castShadow = true;
+            playerGroup.add(body);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshStandardMaterial({color:0xffffff}));
+            head.position.y = 1.7; 
+            playerGroup.add(head);
+            scene.add(playerGroup);
+
+            // --- 6. LOGIC ---
+            const interactables = [
+                { obj: shelfGroup, title: "LIBRARY", desc: "Skills: Python, JS, C++", btn: "CHECK SKILLS" },
+                { obj: deskGroup, title: "WORKSTATION", desc: "My Projects & Github", btn: "OPEN GITHUB" },
+                { obj: bed, title: "SYSTEM", desc: "Rest Mode / Log Out", btn: "LOGOUT" },
+                { obj: bag, title: "GYM", desc: "Hobbies: Boxing & Discipline", btn: "STATS" }
+            ];
+
+            const joystickZone = document.getElementById('joystick-zone');
+            const joystickKnob = document.getElementById('joystick-knob');
+            let moveFwd=0, moveSide=0;
+            let isDragging=false, startX, startY;
+
+            joystickZone.addEventListener('touchstart', (e) => {
+                isDragging=true; startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+            });
+            joystickZone.addEventListener('touchmove', (e) => {
+                if(!isDragging) return;
+                const dx = e.touches[0].clientX - startX;
+                const dy = e.touches[0].clientY - startY;
+                const dist = Math.min(40, Math.sqrt(dx*dx + dy*dy));
+                const angle = Math.atan2(dy, dx);
+                const moveX = Math.cos(angle)*dist;
+                const moveY = Math.sin(angle)*dist;
+                joystickKnob.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
+                moveSide = moveX/40; moveFwd = -(moveY/40);
+            });
+            joystickZone.addEventListener('touchend', () => {
+                isDragging=false; moveFwd=0; moveSide=0;
+                joystickKnob.style.transform = `translate(-50%, -50%)`;
+            });
+
+            // UI Logic
+            const popup = document.getElementById('popup-card');
+            const pTitle = document.getElementById('p-title');
+            const pDesc = document.getElementById('p-desc');
+            const pAction = document.getElementById('p-action');
+
+            // --- 7. ANIMATION ---
+            function animate() {
+                requestAnimationFrame(animate);
+
+                // Movement
+                if(Math.abs(moveFwd)>0.1 || Math.abs(moveSide)>0.1) {
+                    playerGroup.position.z -= moveFwd * 0.15;
+                    playerGroup.position.x += moveSide * 0.15;
+                    playerGroup.rotation.y = Math.atan2(moveSide, moveFwd);
+                }
+
+                // Camera Follow
+                camera.position.x += (playerGroup.position.x - camera.position.x) * 0.1;
+                camera.position.z += ((playerGroup.position.z + 10) - camera.position.z) * 0.1;
+                camera.lookAt(playerGroup.position);
+
+                // Interaction
+                let active = false;
+                interactables.forEach(item => {
+                    if(playerGroup.position.distanceTo(item.obj.position) < 3) {
+                        active = true;
+                        popup.classList.add('active');
+                        pTitle.innerText = item.title;
+                        pDesc.innerText = item.desc;
+                        pAction.innerText = item.btn;
+                    }
+                });
+                if(!active) popup.classList.remove('active');
+
+                renderer.render(scene, camera);
+            }
+
+            // Start
+            progressBar.style.width = "100%";
+            setTimeout(() => {
+                document.getElementById('loader').style.opacity = 0;
+                document.getElementById('ui-layer').classList.add('visible');
+                setTimeout(() => document.getElementById('loader').style.display = 'none', 500);
+            }, 500);
+            
+            animate();
+
+        } catch (error) {
+            alert("SYSTEM ERROR: " + error.message);
+            loaderText.innerText = "FAILED: " + error.message;
+            loaderText.style.color = "red";
+        }
+    </script>
+</body>
+</html>
+
+
+  
